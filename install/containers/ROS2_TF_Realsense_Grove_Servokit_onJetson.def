@@ -1,0 +1,99 @@
+BootStrap: docker
+From: dustynv/ros:foxy-ros-base-l4t-r32.5.0
+#base containers from https://github.com/dusty-nv/jetson-containers
+#dustynv/ros:foxy-ros-base-l4t-r32.5.0
+
+%post
+  cat /etc/apt/sources.list
+
+  lsb_release -a
+  apt update -y
+
+  #standard tools install
+  apt-get install -y xorg-dev libglu1-mesa-dev
+  apt-get install -y ipython3
+  apt-get install -y python3-tk
+  apt-get install -y graphviz
+  apt-get install -y joystick libusb-dev
+  apt-get install -y curl
+
+  apt-get install -y build-essential cmake git pkg-config libjpeg8-dev libtiff5-dev  libavcodec-dev libavformat-dev libswscale-dev libv4l-dev  libgtk2.0-dev libatlas-base-dev gfortran
+  # not compatible with Jetson? apt-get install -y nvidia-modprobe libcupti-dev  
+
+  #joystick
+  wget http://pabr.org/sixlinux/sixpair.c
+  gcc -o sixpair sixpair.c -lusb
+  mv sixpair /usr/local/bin/
+  python3 -m pip install approxeng.input
+  
+  #Grove hat : https://www.seeedstudio.com/blog/2019/04/19/instruction-on-how-to-use-nvidia-jetson-nano-with-grove/
+  curl -sL https://github.com/Seeed-Studio/grove.py/raw/master/install.sh | sudo bash -s –
+  git clone https://github.com/Seeed-Studio/grove.py
+  cd grove.py
+  python3 -m pip install .
+
+  #GPIO setup
+  sudo groupadd -f -r gpio
+  sudo usermod -a -G gpio runner
+  sudo cp /opt/nvidia/jetson-gpio/etc/99-gpio.rules /etc/udev/rules.d/
+  sudo udevadm control --reload-rules && sudo udevadm trigger
+
+  #servo hat
+  python3 -m pip install adafruit-circuitpython-servokit
+
+  #check servokit + joystick use at https://github.com/JetsonHacksNano/ServoKit/blob/master/servoPlay.py
+  
+
+  
+  echo "export CUDA_HOME=/usr/local/cuda" >>.bashrc
+  echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/cuda/extras/CUPTI/lib64" >>.bashrc
+  echo "export PATH=$PATH:$CUDA_HOME/bin" >>.bashrc
+  export CUDA_HOME=/usr/local/cuda
+  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/cuda/extras/CUPTI/lib64
+
+  #install Tensorflow
+  # from https://forums.developer.nvidia.com/t/official-tensorflow-for-jetson-nano/71770
+  #removed : 
+  apt-get install -y libhdf5-serial-dev hdf5-tools libhdf5-dev zlib1g-dev zip libjpeg8-dev liblapack-dev libblas-dev gfortran
+  apt-get install -y python3-pip
+  python3 -m pip install -U pip testresources setuptools==49.6.0
+  python3 -m pip install -U numpy==1.16.1 future==0.18.2 mock==3.0.5 h5py==2.10.0 keras_preprocessing==1.1.1 keras_applications==1.0.8 gast==0.2.2 futures protobuf pybind11
+  # TF-2.x
+  python3 -m pip install --pre --extra-index-url https://developer.download.nvidia.com/compute/redist/jp/v45 tensorflow
+
+  #additionnal ML and communication tools
+  #python3 -m pip install onnx
+  python3 -m pip install kafka-python
+  python3 -m pip install msgpack msgpack-numpy
+  #python3 -m pip install sklearn 
+  #python3 -m pip install seaborn
+  python3 -m pip install pydot pydot-ng
+  #python3 -m pip install --no-dependencies tensorflow-addons==0.13.0 #tensorflow-datasets 
+  #python3 -m pip install -q git+https://github.com/tensorflow/examples.git
+  #python3 -m pip install  --no-dependencies tensorflow-io==0.18.0 tensorflow-probability==0.13.0-rc0
+  #python3 -m pip install  --no-dependencies tensorflow-serving-api-gpu==2.5.1
+  python3 -m pip install flwr
+  #python3 -m pip install statsmodels
+
+  #instal opencv
+  python3 -m pip install opencv-python opencv-contrib-python
+
+  #install Intel RealSense
+  #to test rox foxy:
+  #./scripts/docker_test_ros.sh foxy
+  wget https://github.com/IntelRealSense/librealsense/archive/refs/tags/v2.48.0.zip
+  unzip v2.48.0.zip
+  cd librealsense-2.48.0
+  mkdir build
+  cd build
+  cmake ../ -DFORCE_RSUSB_BACKEND=ON -DBUILD_PYTHON_BINDINGS:bool=true -DPYTHON_EXECUTABLE=/usr/bin/python3.6 -DCMAKE_BUILD_TYPE=release -DBUILD_EXAMPLES=true -DBUILD_GRAPHICAL_EXAMPLES=true -DBUILD_WITH_CUDA:bool=true
+  make
+  make install
+  echo "export PATH=$PATH:~/.local/bin" >>.bashrc
+  echo "export PYTHONPATH=$PYTHONPATH:/usr/local/lib" >>.bashrc
+  echo "export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.6/pyrealsense2" >>.bashrc
+  #source .bashrc
+
+  # install Light Kubernetes : k3s https://k3s.io/
+  #curl -sfL https://get.k3s.io | sh -
+
